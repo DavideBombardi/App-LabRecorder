@@ -10,6 +10,10 @@
 #include <QCompleter>    // [ADAPTRONICS] necessario per setCaseSensitivity sui QComboBox
 #include <QPlainTextEdit> // [ADAPTRONICS] necessario per il campo Note multilinea
 #include <QTextStream>   // [ADAPTRONICS] necessario per leggere LR_Runtime_Entries.csv
+#include <QSysInfo>      // [ADAPTRONICS] necessario per QSysInfo::machineHostName()
+#include <QDialog>       // [ADAPTRONICS] necessario per il popup note post-test
+#include <QVBoxLayout>   // [ADAPTRONICS] necessario per il popup note post-test
+#include <QPushButton>   // [ADAPTRONICS] necessario per il popup note post-test
 #if QT_VERSION_MAJOR < 6
 #include <QRegExp>
 #else
@@ -432,6 +436,29 @@ void MainWindow::startRecording() {
 				"Please set a Study Root before recording.");
 			return;
 		}
+		// [ADAPTRONICS] BEGIN — popup di conferma con riepilogo metadati prima di avviare la registrazione
+		{
+			QString summary;
+			summary += "ID CAD:      " + ui->lineEdit_acq->currentText() + "\n";
+			summary += "ID Patch:    " + ui->lineEdit_participant->currentText() + "\n";
+			summary += "Operator:    " + ui->comboBox_meta_operator->currentText() + "\n";
+			summary += "Material ID: " + ui->comboBox_meta_material->currentText() + "\n";
+			summary += "Test ID:     " + ui->comboBox_meta_test->currentText() + "\n";
+			summary += "Perno mat.:  " + ui->comboBox_meta_perno_materiale->currentText() + "\n";
+			summary += "Perno diam.: " + ui->comboBox_meta_perno_diametro->currentText() + "\n";
+			summary += "Perno n.:    " + ui->comboBox_meta_perno_numero->currentText() + "\n";
+			summary += "Perno pos.:  " + ui->comboBox_meta_perno_posizione->currentText() + "\n";
+			QString note = ui->plainTextEdit_meta_note->toPlainText().trimmed();
+			if (!note.isEmpty()) summary += "Note:        " + note + "\n";
+			summary += "\nFile: " + QDir::cleanPath(ui->rootEdit->text() + '/' + recFilename);
+			QMessageBox confirm(QMessageBox::Question, "Conferma registrazione", summary,
+				QMessageBox::Ok | QMessageBox::Cancel, this);
+			confirm.button(QMessageBox::Ok)->setText("Conferma e Avvia");
+			confirm.button(QMessageBox::Cancel)->setText("Annulla");
+			if (confirm.exec() != QMessageBox::Ok) return;
+		}
+		// [ADAPTRONICS] END — popup conferma
+
 		recFilename.prepend(QDir::cleanPath(ui->rootEdit->text()) + '/');
 
 		QFileInfo recFileInfo(recFilename);
@@ -501,6 +528,7 @@ void MainWindow::startRecording() {
 		sessionMetadata["perno_diametro"]    = ui->comboBox_meta_perno_diametro->currentText().toStdString();
 		sessionMetadata["perno_numero"]      = ui->comboBox_meta_perno_numero->currentText().toStdString();
 		sessionMetadata["perno_posizione"]   = ui->comboBox_meta_perno_posizione->currentText().toStdString();
+		sessionMetadata["start_time"]        = QDateTime::currentDateTime().toString(Qt::ISODate).toStdString();
 		// [ADAPTRONICS] salva path e metadati per la notifica di completamento in stopRecording()
 		lastRecFilename_     = recFilename;
 		lastSessionMetadata_ = sessionMetadata;
@@ -509,6 +537,7 @@ void MainWindow::startRecording() {
 		currentRecording = std::make_unique<recording>(recFilename.toStdString(),
 			requestedAndAvailableStreams, watchfor, syncOptionsByStreamName, true, sessionMetadata);
 		ui->stopButton->setEnabled(true);
+		ui->groupBox_metadata->setEnabled(false); // [ADAPTRONICS] freeze metadati durante la registrazione
 		ui->startButton->setEnabled(false);
 		startTime = (int)lsl::local_clock();
 
@@ -526,7 +555,28 @@ void MainWindow::stopRecording() {
 		} catch (std::exception &e) { qWarning() << "exception on stop: " << e.what(); }
 		ui->startButton->setEnabled(true);
 		ui->stopButton->setEnabled(false);
+		ui->groupBox_metadata->setEnabled(true); // [ADAPTRONICS] unfreeze metadati dopo la registrazione
 		statusBar()->showMessage("Stopped");
+		// [ADAPTRONICS] BEGIN — popup note post-test
+		// XDF già chiuso — le note vanno solo nel JSON/stdout
+		// sia "Chiudi" che la X del popup portano allo stesso punto: il JSON viene sempre inviato
+		if (!lastRecFilename_.isEmpty()) {
+			QDialog notesDlg(this);
+			notesDlg.setWindowTitle("Note post-test");
+			notesDlg.setMinimumWidth(420);
+			auto *layout = new QVBoxLayout(&notesDlg);
+			auto *noteEdit = new QPlainTextEdit(&notesDlg);
+			noteEdit->setPlaceholderText("Niente da dichiarare");
+			noteEdit->setMinimumHeight(100);
+			auto *closeBtn = new QPushButton("Chiudi", &notesDlg);
+			connect(closeBtn, &QPushButton::clicked, &notesDlg, &QDialog::accept);
+			layout->addWidget(noteEdit);
+			layout->addWidget(closeBtn);
+			notesDlg.exec(); // ritorna sia su Chiudi che su X — il JSON viene sempre inviato
+			lastSessionMetadata_["note_post"] = noteEdit->toPlainText().trimmed().toStdString();
+		}
+		// [ADAPTRONICS] END — popup note post-test
+
 		// [ADAPTRONICS] notifica completamento: stdout (primario) + last_recording.json (fallback)
 		if (!lastRecFilename_.isEmpty()) {
 			QString cfgDir = QFileInfo(QCoreApplication::applicationFilePath()).absolutePath();
@@ -691,6 +741,8 @@ QString MainWindow::buildCompletionJson() const {
 			.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
 		json += ",\"" + key + "\":\"" + value + "\"";
 	}
+	json += ",\"end_time\":\"" + QDateTime::currentDateTime().toString(Qt::ISODate) + "\"";
+	json += ",\"hostname\":\"" + QSysInfo::machineHostName() + "\"";
 	json += "}";
 	return json;
 }

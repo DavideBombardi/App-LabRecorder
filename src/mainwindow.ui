@@ -430,8 +430,9 @@
        </widget>
       </item>
       <item row="5" column="0">
+       <!-- [ADAPTRONICS] rinominato da "Note" a "Note pre-test" per chiarire che vanno compilate prima dello Start -->
        <widget class="QLabel" name="label_meta_note">
-        <property name="text"><string>Note</string></property>
+        <property name="text"><string>Note pre-test</string></property>
        </widget>
       </item>
       <!-- [ADAPTRONICS] convertito da QLineEdit a QPlainTextEdit per supporto testo multilinea nelle note -->

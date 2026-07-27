@@ -162,6 +162,27 @@ Esempio riga stdout:
 - Al **cambio CAD o Patch**: `buildFilename()` scansiona da 1 con il path completo (StudyRoot + template) e si posiziona sul primo run non esistente → cartella nuova = run_001, cartella già usata = run_N+1
 - Bug upstream fixato: `buildFilename()` controllava un path relativo senza StudyRoot, quindi `QFileInfo::exists()` non trovava mai niente e il counter restava bloccato a 1
 
+**Cosa G — popup di conferma prima dello Start:**
+Prima di avviare la registrazione appare una dialog con il riepilogo di tutti i metadati selezionati (CAD, Patch, Operator, Material, Test, Perno, Note pre-test) e il path completo del file XDF (StudyRoot incluso). Bottoni: "Conferma e Avvia" / "Annulla". Se si annulla non viene toccato nulla. Posizionato dopo i check di validazione, prima di qualsiasi operazione su file.
+
+**Cosa H — freeze metadati durante la registrazione:**
+Allo Start, `groupBox_metadata` viene disabilitato interamente (`setEnabled(false)`) — tutti i campi diventano grigi e non modificabili. Allo Stop viene riabilitato. Questo chiarisce visivamente che i metadati scritti nell'XDF sono quelli selezionati prima dello Start e non possono essere cambiati a registrazione in corso.
+
+**Cosa I — `start_time`, `end_time`, `hostname` nel JSON di completamento:**
+- `start_time`: catturato in `startRecording()` al momento della creazione del file, formato ISO 8601
+- `end_time`: catturato in `buildCompletionJson()` al momento della notifica di stop
+- `hostname`: nome macchina via `QSysInfo::machineHostName()`
+Tutti e tre presenti sia nello stdout `RECORDING_DONE` che in `last_recording.json`.
+
+**Cosa L — label "Note pre-test":**
+Il campo note è stato rinominato da "Note" a "Note pre-test" nel pannello metadati per chiarire che vanno compilate prima di avviare la registrazione.
+
+**Cosa M — popup note post-test allo Stop:**
+Dopo la chiusura dell'XDF appare una `QDialog` con un `QPlainTextEdit` (placeholder "Niente da dichiarare") e un bottone "Chiudi". Sia "Chiudi" che la X della finestra portano allo stesso punto — il JSON viene **sempre** inviato. Il testo inserito viene salvato come `note_post` in `lastSessionMetadata_` e incluso nel JSON/stdout. Se non si scrive nulla, `note_post` è stringa vuota.
+
+**Misura di sicurezza — chiusura durante registrazione:**
+`closeEvent` ignora l'evento di chiusura (`ev->ignore()`) se `currentRecording` è attivo. La finestra non può essere chiusa durante una registrazione — comportamento upstream già presente, non modificato.
+
 **Conflitti futuri:** tutto il codice [ADAPTRONICS] è in blocchi delimitati.
 Le funzioni `atFilteredList`, `repopulateAtDropdowns`, `buildCompletionJson`,
 `notifyRecordingDone` sono interamente nuove.
