@@ -31,8 +31,13 @@ void RemoteControlSocket::handleLine(QString s, QTcpSocket *sock) {
 		} else if (s.contains("none")) {
 			emit select_none();
 		}
+	// [ADAPTRONICS] BEGIN — comando status: restituisce run corrente come JSON invece di OK
+	} else if (s == "status") {
+		emit status_requested(sock);
+		return; // la risposta la scrive MainWindow tramite il segnale, non scriviamo OK
 	}
-	sock->write("OK");
+	// [ADAPTRONICS] END — comando status
+	sock->write("OK\n"); // [ADAPTRONICS] aggiunto \n per permettere readline() lato Python
 	// TODO: select /deselect streams
 	// TODO: send acknowledgement
 	// TODO: get current state

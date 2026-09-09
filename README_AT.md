@@ -133,9 +133,10 @@ rispettando il filtro operatore corrente. I campi Perno sono indipendenti dal CA
 Tutti i valori dell'interfaccia vengono raccolti in `std::map<std::string,std::string>`
 e passati a `recording` → `XDFWriter` → FileHeader XDF. Campi:
 `cad_id`, `patch_id`, `operator`, `material_id`, `test_id`, `note`,
-`perno_materiale`, `perno_diametro`, `perno_numero`, `perno_posizione`.
+`perno_materiale`, `perno_diametro`, `perno_numero`, `perno_posizione`, `run`, `start_time`.
 Path e metadati vengono anche salvati in `lastRecFilename_` / `lastSessionMetadata_`
-per la notifica di completamento.
+per la notifica di completamento. Il campo `run` è il valore corrente di `spin_counter`
+al momento dell'avvio — finisce nell'XDF, nel JSON stdout e in `last_recording.json`.
 
 **Cosa D — filtro operatore (`loadAtCsv()`):**
 - `currentOperator_` = username Windows (`qgetenv("USERNAME")`) letto all'avvio
@@ -162,8 +163,9 @@ Esempio riga stdout:
 - Al **cambio CAD o Patch**: `buildFilename()` scansiona da 1 con il path completo (StudyRoot + template) e si posiziona sul primo run non esistente → cartella nuova = run_001, cartella già usata = run_N+1
 - Bug upstream fixato: `buildFilename()` controllava un path relativo senza StudyRoot, quindi `QFileInfo::exists()` non trovava mai niente e il counter restava bloccato a 1
 
-**Cosa G — popup di conferma prima dello Start:**
-Prima di avviare la registrazione appare una dialog con il riepilogo di tutti i metadati selezionati (CAD, Patch, Operator, Material, Test, Perno, Note pre-test) e il path completo del file XDF (StudyRoot incluso). Bottoni: "Conferma e Avvia" / "Annulla". Se si annulla non viene toccato nulla. Posizionato dopo i check di validazione, prima di qualsiasi operazione su file.
+**Cosa G — popup di conferma prima dello Start:** ~~RIMOSSO in v2~~
+Eliminato per compatibilità con il controllo API TCP (il popup bloccava lo start remoto).
+Il codice è commentato in `startRecording()` con il marker `[ADAPTRONICS] RIMOSSO (v2)` ed è recuperabile.
 
 **Cosa H — freeze metadati durante la registrazione:**
 Allo Start, `groupBox_metadata` viene disabilitato interamente (`setEnabled(false)`) — tutti i campi diventano grigi e non modificabili. Allo Stop viene riabilitato. Questo chiarisce visivamente che i metadati scritti nell'XDF sono quelli selezionati prima dello Start e non possono essere cambiati a registrazione in corso.
@@ -177,8 +179,10 @@ Tutti e tre presenti sia nello stdout `RECORDING_DONE` che in `last_recording.js
 **Cosa L — label "Note pre-test":**
 Il campo note è stato rinominato da "Note" a "Note pre-test" nel pannello metadati per chiarire che vanno compilate prima di avviare la registrazione.
 
-**Cosa M — popup note post-test allo Stop:**
-Dopo la chiusura dell'XDF appare una `QDialog` con un `QPlainTextEdit` (placeholder "Niente da dichiarare") e un bottone "Chiudi". Sia "Chiudi" che la X della finestra portano allo stesso punto — il JSON viene **sempre** inviato. Il testo inserito viene salvato come `note_post` in `lastSessionMetadata_` e incluso nel JSON/stdout. Se non si scrive nulla, `note_post` è stringa vuota.
+**Cosa M — popup note post-test allo Stop:** ~~RIMOSSO in v2~~
+Eliminato insieme al popup conferma. Le note post-test non vengono più raccolte (non erano nell'XDF,
+solo nel JSON). Il codice è commentato in `stopRecording()` con il marker `[ADAPTRONICS] RIMOSSO (v2)`
+ed è recuperabile. Se si vuole raccogliere note post-test, farlo nella GUI Python prima di mandare `stop`.
 
 **Misura di sicurezza — chiusura durante registrazione:**
 `closeEvent` ignora l'evento di chiusura (`ev->ignore()`) se `currentRecording` è attivo. La finestra non può essere chiusa durante una registrazione — comportamento upstream già presente, non modificato.
@@ -277,6 +281,95 @@ TEST,T-001,,
 PERNO_MATERIALE,acciaio,91912,       ← visibile a tutti
 PERNO_MATERIALE,acciaio speciale,91912,Mario Rossi  ← solo Mario Rossi
 ```
+
+---
+
+---
+
+### 8. API TCP — Controllo remoto esteso (v2)
+
+**File:** `src/tcpinterface.h` + `src/tcpinterface.cpp` + `src/mainwindow.cpp`
+
+**Cosa:** esteso il protocollo TCP Remote Control Socket con:
+
+#### Nuovi comandi
+
+| Comando | Effetto |
+|---------|---------|
+| `status` | Risponde `{"run":N}` sulla socket (run counter corrente) |
+
+#### Nuove opzioni del comando `filename`
+
+```
+filename {operator:Mario Rossi}{material:acciaio}{test:T-001}{note:testo libero}
+         {perno_materiale:acciaio}{perno_diametro:M6}{perno_numero:2}{perno_posizione:fronte}
+```
+
+Opzioni complete (tutte opzionali, combinabili in un unico comando):
+
+| Opzione | Widget settato | Finisce nell'XDF |
+|---------|----------------|-----------------|
+| `acquisition` | `lineEdit_acq` (ID CAD) | `cad_id` |
+| `participant` | `lineEdit_participant` (ID Patch) | `patch_id` |
+| `operator` | `comboBox_meta_operator` | `operator` |
+| `material` | `comboBox_meta_material` | `material_id` |
+| `test` | `comboBox_meta_test` | `test_id` |
+| `note` | `plainTextEdit_meta_note` | `note` |
+| `perno_materiale` | `comboBox_meta_perno_materiale` | `perno_materiale` |
+| `perno_diametro` | `comboBox_meta_perno_diametro` | `perno_diametro` |
+| `perno_numero` | `comboBox_meta_perno_numero` | `perno_numero` |
+| `perno_posizione` | `comboBox_meta_perno_posizione` | `perno_posizione` |
+| `run` | `spin_counter` | `run` |
+| `session` | `lineEdit_session` | — (path) |
+| `root` | `rootEdit` | — (path) |
+| `task` | `input_blocktask` | — (path) |
+| `modality` | `input_modality` | — (path) |
+
+**Nota sull'ordine:** le opzioni AT vengono applicate in due fasi interne indipendentemente dall'ordine in cui appaiono nel comando: prima `operator` (che triggera `repopulateAtDropdowns`), poi tutti gli altri. Non importa l'ordine nel comando.
+
+**Nota sulla run:** settare `acquisition` o `participant` triggera `buildFilename()` che auto-seleziona la prima run libera su disco. Se si aggiunge anche `{run:N}` nello stesso comando, il valore esplicito sovrascrive l'auto-selezione (viene applicato dopo).
+
+#### Notifiche stdout (v2)
+
+| Messaggio | Quando | Contenuto |
+|-----------|--------|-----------|
+| `[LabRecorder] RECORDING_STARTED:{...}` | Appena la registrazione parte | `status`, `run`, `path` |
+| `[LabRecorder] RECORDING_DONE:{...}` | Quando la registrazione si ferma | tutti i metadati + `run`, `path`, `start_time`, `end_time`, `hostname` |
+
+Entrambi i messaggi vengono anche scritti in `last_recording.json` (solo RECORDING_DONE sovrascrive il file).
+
+#### Flusso Python completo
+
+```python
+import socket, json, subprocess
+
+proc = subprocess.Popen(["LabRecorder.exe"], stdout=subprocess.PIPE)
+
+sock = socket.create_connection(("localhost", 22345))
+sock.sendall(b'filename {acquisition:91912}{participant:P001}'
+             b'{operator:Mario Rossi}{material:acciaio}{test:T-001}'
+             b'{note:testo libero}{perno_materiale:acciaio}'
+             b'{perno_diametro:M6}{perno_numero:2}{perno_posizione:fronte}\n')
+sock.sendall(b'start\n')
+
+# Leggi run effettiva da stdout
+for line in proc.stdout:
+    if b'RECORDING_STARTED' in line:
+        data = json.loads(line.split(b':',1)[1])
+        print("Registrazione avviata, run:", data['run'])
+        break
+
+# ... a fine test ...
+sock.sendall(b'stop\n')
+
+for line in proc.stdout:
+    if b'RECORDING_DONE' in line:
+        data = json.loads(line.split(b':',1)[1])
+        print("File salvato:", data['path'])
+        break
+```
+
+**Conflitti futuri:** il segnale `status_requested` e le opzioni AT in `rcsUpdateFilename` sono in blocchi `[ADAPTRONICS]`. Il comando `status` in `tcpinterface.cpp` usa `return` prima di `sock->write("OK")` — se l'upstream aggiunge comandi dopo il blocco `select`, verificare che la `return` non salti codice nuovo.
 
 ---
 

@@ -21,6 +21,7 @@ signals:
 	void filename(QString s);
 	void select_all();
 	void select_none();
+	void status_requested(QTcpSocket *sock); // [ADAPTRONICS] comando status: risponde con run corrente
 
 public slots:
 	void addClient();

@@ -7,13 +7,9 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
-#include <QCompleter>    // [ADAPTRONICS] necessario per setCaseSensitivity sui QComboBox
 #include <QPlainTextEdit> // [ADAPTRONICS] necessario per il campo Note multilinea
-#include <QTextStream>   // [ADAPTRONICS] necessario per leggere LR_Runtime_Entries.csv
+#include <QTextStream>   // [ADAPTRONICS] necessario per scrivere last_recording.json
 #include <QSysInfo>      // [ADAPTRONICS] necessario per QSysInfo::machineHostName()
-#include <QDialog>       // [ADAPTRONICS] necessario per il popup note post-test
-#include <QVBoxLayout>   // [ADAPTRONICS] necessario per il popup note post-test
-#include <QPushButton>   // [ADAPTRONICS] necessario per il popup note post-test
 #if QT_VERSION_MAJOR < 6
 #include <QRegExp>
 #else
@@ -74,21 +70,20 @@ MainWindow::MainWindow(QWidget *parent, const char *config_file)
 		this->buildFilename();
 	});
 	connect(ui->rootEdit, &QLineEdit::editingFinished, this, &MainWindow::buildFilename);
-	// [ADAPTRONICS] segnale cambiato da QLineEdit::editingFinished a QComboBox::currentTextChanged
-	//               perché i tre campi sono stati convertiti in QComboBox editabili
-	connect(ui->lineEdit_participant, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
-	connect(ui->lineEdit_session, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
-	connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
+	connect(ui->lineEdit_participant, &QLineEdit::textChanged, this, &MainWindow::buildFilename);
+	connect(ui->lineEdit_session, &QLineEdit::textChanged, this, &MainWindow::buildFilename);
+	connect(ui->lineEdit_acq, &QLineEdit::textChanged, this, &MainWindow::buildFilename);
 
-	// [ADAPTRONICS] tendina a cascata: CAD ID → ID Patch
-	// quando CAD ID cambia: ripopola ID Patch con i figli del CAD selezionato
-	connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, [this](const QString &text) {
-		ui->lineEdit_participant->clear();
-		ui->lineEdit_participant->addItems(atFilteredList("PATCH:" + text));
-		if (ui->lineEdit_participant->completer())
-			ui->lineEdit_participant->completer()->setCaseSensitivity(Qt::CaseInsensitive);
-	});
-	// [FINE ADAPTRONICS] tendina a cascata
+	// [ADAPTRONICS] RIMOSSO (v3) — cascata CAD→Patch rimossa: ogni campo è indipendente
+	// La GUI Python imposta esplicitamente tutti i valori via TCP, senza relazioni tra menu.
+	// // [ADAPTRONICS] tendina a cascata: CAD ID → ID Patch
+	// connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, [this](const QString &text) {
+	// 	ui->lineEdit_participant->clear();
+	// 	ui->lineEdit_participant->addItems(atFilteredList("PATCH:" + text));
+	// 	if (ui->lineEdit_participant->completer())
+	// 		ui->lineEdit_participant->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+	// });
+	// // [FINE ADAPTRONICS] tendina a cascata
 	connect(ui->input_blocktask, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
 	connect(ui->input_modality, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
 	connect(ui->check_bids, &QCheckBox::toggled, this, [this](bool checked) {
@@ -282,12 +277,6 @@ void MainWindow::load_config(QString filename) {
 
 	} catch (std::exception &e) { qWarning() << "Problem parsing config file: " << e.what(); }
 
-	// [ADAPTRONICS] carica il CSV per le tendine a cascata dalla stessa cartella del .cfg
-	QString csvDir = filename.isEmpty()
-		? QFileInfo(QCoreApplication::applicationFilePath()).absolutePath()
-		: QFileInfo(filename).absolutePath();
-	loadAtCsv(csvDir);
-
 	refreshStreams();
 
 	if (auto_start) { startRecording(); }
@@ -436,28 +425,31 @@ void MainWindow::startRecording() {
 				"Please set a Study Root before recording.");
 			return;
 		}
-		// [ADAPTRONICS] BEGIN — popup di conferma con riepilogo metadati prima di avviare la registrazione
-		{
-			QString summary;
-			summary += "ID CAD:      " + ui->lineEdit_acq->currentText() + "\n";
-			summary += "ID Patch:    " + ui->lineEdit_participant->currentText() + "\n";
-			summary += "Operator:    " + ui->comboBox_meta_operator->currentText() + "\n";
-			summary += "Material ID: " + ui->comboBox_meta_material->currentText() + "\n";
-			summary += "Test ID:     " + ui->comboBox_meta_test->currentText() + "\n";
-			summary += "Perno mat.:  " + ui->comboBox_meta_perno_materiale->currentText() + "\n";
-			summary += "Perno diam.: " + ui->comboBox_meta_perno_diametro->currentText() + "\n";
-			summary += "Perno n.:    " + ui->comboBox_meta_perno_numero->currentText() + "\n";
-			summary += "Perno pos.:  " + ui->comboBox_meta_perno_posizione->currentText() + "\n";
-			QString note = ui->plainTextEdit_meta_note->toPlainText().trimmed();
-			if (!note.isEmpty()) summary += "Note:        " + note + "\n";
-			summary += "\nFile: " + QDir::cleanPath(ui->rootEdit->text() + '/' + recFilename);
-			QMessageBox confirm(QMessageBox::Question, "Conferma registrazione", summary,
-				QMessageBox::Ok | QMessageBox::Cancel, this);
-			confirm.button(QMessageBox::Ok)->setText("Conferma e Avvia");
-			confirm.button(QMessageBox::Cancel)->setText("Annulla");
-			if (confirm.exec() != QMessageBox::Ok) return;
-		}
-		// [ADAPTRONICS] END — popup conferma
+		// [ADAPTRONICS] RIMOSSO (v2) — popup di conferma pre-start eliminato per supporto API TCP
+		// Era: QMessageBox con riepilogo metadati e bottoni "Conferma e Avvia" / "Annulla"
+		// Il codice originale è recuperabile dal commit precedente o da README_AT.md (Cosa G)
+		// // [ADAPTRONICS] BEGIN — popup di conferma con riepilogo metadati prima di avviare la registrazione
+		// {
+		// 	QString summary;
+		// 	summary += "ID CAD:      " + ui->lineEdit_acq->currentText() + "\n";
+		// 	summary += "ID Patch:    " + ui->lineEdit_participant->currentText() + "\n";
+		// 	summary += "Operator:    " + ui->comboBox_meta_operator->currentText() + "\n";
+		// 	summary += "Material ID: " + ui->comboBox_meta_material->currentText() + "\n";
+		// 	summary += "Test ID:     " + ui->comboBox_meta_test->currentText() + "\n";
+		// 	summary += "Perno mat.:  " + ui->comboBox_meta_perno_materiale->currentText() + "\n";
+		// 	summary += "Perno diam.: " + ui->comboBox_meta_perno_diametro->currentText() + "\n";
+		// 	summary += "Perno n.:    " + ui->comboBox_meta_perno_numero->currentText() + "\n";
+		// 	summary += "Perno pos.:  " + ui->comboBox_meta_perno_posizione->currentText() + "\n";
+		// 	QString note = ui->plainTextEdit_meta_note->toPlainText().trimmed();
+		// 	if (!note.isEmpty()) summary += "Note:        " + note + "\n";
+		// 	summary += "\nFile: " + QDir::cleanPath(ui->rootEdit->text() + '/' + recFilename);
+		// 	QMessageBox confirm(QMessageBox::Question, "Conferma registrazione", summary,
+		// 		QMessageBox::Ok | QMessageBox::Cancel, this);
+		// 	confirm.button(QMessageBox::Ok)->setText("Conferma e Avvia");
+		// 	confirm.button(QMessageBox::Cancel)->setText("Annulla");
+		// 	if (confirm.exec() != QMessageBox::Ok) return;
+		// }
+		// // [ADAPTRONICS] END — popup conferma
 
 		recFilename.prepend(QDir::cleanPath(ui->rootEdit->text()) + '/');
 
@@ -518,17 +510,18 @@ void MainWindow::startRecording() {
 		//   I valori vengono passati a recording → XDFWriter e scritti nella FileHeader XDF
 		//   nel blocco <adaptronics>, leggibile da qualsiasi parser XDF (MNE, EEGLAB, ecc.)
 		std::map<std::string, std::string> sessionMetadata;
-		sessionMetadata["cad_id"]      = ui->lineEdit_acq->currentText().toStdString();
-		sessionMetadata["patch_id"]    = ui->lineEdit_participant->currentText().toStdString();
-		sessionMetadata["operator"]    = ui->comboBox_meta_operator->currentText().toStdString();
-		sessionMetadata["material_id"] = ui->comboBox_meta_material->currentText().toStdString();
-		sessionMetadata["test_id"]     = ui->comboBox_meta_test->currentText().toStdString();
-		sessionMetadata["note"]              = ui->plainTextEdit_meta_note->toPlainText().toStdString(); // [ADAPTRONICS] QPlainTextEdit → toPlainText()
-		sessionMetadata["perno_materiale"]   = ui->comboBox_meta_perno_materiale->currentText().toStdString();
-		sessionMetadata["perno_diametro"]    = ui->comboBox_meta_perno_diametro->currentText().toStdString();
-		sessionMetadata["perno_numero"]      = ui->comboBox_meta_perno_numero->currentText().toStdString();
-		sessionMetadata["perno_posizione"]   = ui->comboBox_meta_perno_posizione->currentText().toStdString();
+		sessionMetadata["cad_id"]            = ui->lineEdit_acq->text().toStdString();
+		sessionMetadata["patch_id"]          = ui->lineEdit_participant->text().toStdString();
+		sessionMetadata["operator"]          = ui->lineEdit_meta_operator->text().toStdString();
+		sessionMetadata["material_id"]       = ui->lineEdit_meta_material->text().toStdString();
+		sessionMetadata["test_id"]           = ui->lineEdit_meta_test->text().toStdString();
+		sessionMetadata["note"]              = ui->plainTextEdit_meta_note->toPlainText().toStdString();
+		sessionMetadata["perno_materiale"]   = ui->lineEdit_meta_perno_materiale->text().toStdString();
+		sessionMetadata["perno_diametro"]    = ui->lineEdit_meta_perno_diametro->text().toStdString();
+		sessionMetadata["perno_numero"]      = ui->lineEdit_meta_perno_numero->text().toStdString();
+		sessionMetadata["perno_posizione"]   = ui->lineEdit_meta_perno_posizione->text().toStdString();
 		sessionMetadata["start_time"]        = QDateTime::currentDateTime().toString(Qt::ISODate).toStdString();
+		sessionMetadata["run"]               = QString::number(ui->spin_counter->value()).toStdString(); // [ADAPTRONICS] run corrente inclusa nei metadati XDF e nel JSON
 		// [ADAPTRONICS] salva path e metadati per la notifica di completamento in stopRecording()
 		lastRecFilename_     = recFilename;
 		lastSessionMetadata_ = sessionMetadata;
@@ -540,6 +533,17 @@ void MainWindow::startRecording() {
 		ui->groupBox_metadata->setEnabled(false); // [ADAPTRONICS] freeze metadati durante la registrazione
 		ui->startButton->setEnabled(false);
 		startTime = (int)lsl::local_clock();
+
+		// [ADAPTRONICS] BEGIN — notifica avvio registrazione su stdout (simmetrica a RECORDING_DONE)
+		{
+			QString started = "{\"status\":\"started\"";
+			started += ",\"run\":"  + QString::number(ui->spin_counter->value());
+			started += ",\"path\":\"" + QString(recFilename).replace('\\', '/') + "\"";
+			started += "}";
+			std::cout << "[LabRecorder] RECORDING_STARTED:" << started.toStdString() << std::endl;
+			std::cout.flush();
+		}
+		// [ADAPTRONICS] END — notifica avvio registrazione
 
 	} else if (!hideWarnings) {
 		QMessageBox::information(
@@ -557,25 +561,28 @@ void MainWindow::stopRecording() {
 		ui->stopButton->setEnabled(false);
 		ui->groupBox_metadata->setEnabled(true); // [ADAPTRONICS] unfreeze metadati dopo la registrazione
 		statusBar()->showMessage("Stopped");
-		// [ADAPTRONICS] BEGIN — popup note post-test
-		// XDF già chiuso — le note vanno solo nel JSON/stdout
-		// sia "Chiudi" che la X del popup portano allo stesso punto: il JSON viene sempre inviato
-		if (!lastRecFilename_.isEmpty()) {
-			QDialog notesDlg(this);
-			notesDlg.setWindowTitle("Note post-test");
-			notesDlg.setMinimumWidth(420);
-			auto *layout = new QVBoxLayout(&notesDlg);
-			auto *noteEdit = new QPlainTextEdit(&notesDlg);
-			noteEdit->setPlaceholderText("Niente da dichiarare");
-			noteEdit->setMinimumHeight(100);
-			auto *closeBtn = new QPushButton("Chiudi", &notesDlg);
-			connect(closeBtn, &QPushButton::clicked, &notesDlg, &QDialog::accept);
-			layout->addWidget(noteEdit);
-			layout->addWidget(closeBtn);
-			notesDlg.exec(); // ritorna sia su Chiudi che su X — il JSON viene sempre inviato
-			lastSessionMetadata_["note_post"] = noteEdit->toPlainText().trimmed().toStdString();
-		}
-		// [ADAPTRONICS] END — popup note post-test
+		// [ADAPTRONICS] RIMOSSO (v2) — popup note post-test eliminato per supporto API TCP
+		// Era: QDialog con QPlainTextEdit per inserire note a caldo dopo il test.
+		// Il testo finiva in lastSessionMetadata_["note_post"] → JSON stdout e last_recording.json.
+		// note_post NON veniva scritto nell'XDF (già chiuso al momento dello stop).
+		// Il codice originale è recuperabile dal commit precedente o da README_AT.md (Cosa M)
+		// // [ADAPTRONICS] BEGIN — popup note post-test
+		// if (!lastRecFilename_.isEmpty()) {
+		// 	QDialog notesDlg(this);
+		// 	notesDlg.setWindowTitle("Note post-test");
+		// 	notesDlg.setMinimumWidth(420);
+		// 	auto *layout = new QVBoxLayout(&notesDlg);
+		// 	auto *noteEdit = new QPlainTextEdit(&notesDlg);
+		// 	noteEdit->setPlaceholderText("Niente da dichiarare");
+		// 	noteEdit->setMinimumHeight(100);
+		// 	auto *closeBtn = new QPushButton("Chiudi", &notesDlg);
+		// 	connect(closeBtn, &QPushButton::clicked, &notesDlg, &QDialog::accept);
+		// 	layout->addWidget(noteEdit);
+		// 	layout->addWidget(closeBtn);
+		// 	notesDlg.exec();
+		// 	lastSessionMetadata_["note_post"] = noteEdit->toPlainText().trimmed().toStdString();
+		// }
+		// // [ADAPTRONICS] END — popup note post-test
 
 		// [ADAPTRONICS] notifica completamento: stdout (primario) + last_recording.json (fallback)
 		if (!lastRecFilename_.isEmpty()) {
@@ -608,9 +615,8 @@ void MainWindow::buildBidsTemplate() {
 	// path/to/CurrentStudy/sub-%p/ses-%s/eeg/sub-%p_ses-%s_task-%b[_acq-%a]_run-%r_eeg.xdf
 
 	// Make sure the BIDS required fields are full.
-	// [ADAPTRONICS] .text()/.setText() → .currentText()/.setCurrentText() per QComboBox
-	if (ui->lineEdit_participant->currentText().isEmpty()) { ui->lineEdit_participant->setCurrentText("P001"); }
-	if (ui->lineEdit_session->currentText().isEmpty()) { ui->lineEdit_session->setCurrentText("S001"); }
+	if (ui->lineEdit_participant->text().isEmpty()) { ui->lineEdit_participant->setText("P001"); }
+	if (ui->lineEdit_session->text().isEmpty()) { ui->lineEdit_session->setText("S001"); }
 	if (ui->input_blocktask->currentText().isEmpty()) {
 		ui->input_blocktask->setCurrentText("Default");
 	}
@@ -625,7 +631,7 @@ void MainWindow::buildBidsTemplate() {
 
 	// filename
 	QString fname = "sub-%p_ses-%s_task-%b";
-	if (!ui->lineEdit_acq->currentText().isEmpty()) { fname.append("_acq-%a"); } // [ADAPTRONICS] .text() → .currentText() (QComboBox)
+	if (!ui->lineEdit_acq->text().isEmpty()) { fname.append("_acq-%a"); }
 	fname.append("_run-%r_%m.xdf");
 	fileparts << fname;
 	ui->lineEdit_template->setText(QDir::toNativeSeparators(fileparts.join('/')));
@@ -667,10 +673,9 @@ QString MainWindow::replaceFilename(QString fullfile) const {
 	// path/to/study/sub-<participant_label>/ses-<session_label>/eeg/sub-<participant_label>_ses-<session_label>_task-<task_label>[_acq-<acq_label>]_run-<run_index>_eeg.xdf
 	// path/to/study/sub-%p/ses-%s/eeg/sub-%p_ses-%s_task-%b[_acq-%a]_run-%r_eeg.xdf
 	// %b already replaced above.
-	// [ADAPTRONICS] .text() → .currentText() perché i campi sono ora QComboBox editabili
-	fullfile.replace("%p", ui->lineEdit_participant->currentText());
-	fullfile.replace("%s", ui->lineEdit_session->currentText());
-	fullfile.replace("%a", ui->lineEdit_acq->currentText());
+	fullfile.replace("%p", ui->lineEdit_participant->text());
+	fullfile.replace("%s", ui->lineEdit_session->text());
+	fullfile.replace("%a", ui->lineEdit_acq->text());
 	fullfile.replace("%m", ui->input_modality->currentText());
 
 	// Replace either %r or %n with the counter
@@ -766,178 +771,6 @@ void MainWindow::notifyRecordingDone(const QString &cfgDir) const {
 	}
 }
 
-// [ADAPTRONICS] helper: restituisce la lista filtrata per operatore corrente
-// voci con operatore vuoto → visibili a tutti
-// voci con operatore valorizzato → solo se corrisponde a currentOperator_ o atShowAll_ è true
-QStringList MainWindow::atFilteredList(const QString &key) const {
-	// il filtro usa l'operatore attualmente selezionato nel campo, non l'username Windows
-	const QString selectedOp = ui->comboBox_meta_operator->currentText();
-	QStringList out;
-	QSet<QString> seen;
-	for (const auto &pair : atCsvData_.value(key))
-		if (pair.second.isEmpty() || atShowAll_ || pair.second == selectedOp)
-			if (!seen.contains(pair.first)) { seen.insert(pair.first); out << pair.first; }
-	return out;
-}
-
-// [ADAPTRONICS] ripopola tutti i dropdown dipendenti dall'operatore
-// chiamato all'avvio e ogni volta che cambia la spunta "Mostra tutto"
-void MainWindow::repopulateAtDropdowns() {
-	// Il campo Operator mostra SEMPRE tutti gli operatori, non viene filtrato.
-	// blockSignals evita che il currentTextChanged dell'Operator scatti mentre lo ripopoliamo
-	// e richiami repopulateAtDropdowns in loop.
-	{
-		QSignalBlocker blocker(ui->comboBox_meta_operator);
-		QString prevOp = ui->comboBox_meta_operator->currentText();
-		ui->comboBox_meta_operator->clear();
-		for (const auto &pair : atCsvData_.value("OPERATOR"))
-			ui->comboBox_meta_operator->addItem(pair.first);
-		// ripristina l'operatore selezionato (o pre-seleziona l'username Windows se vuoto)
-		const QString restoreOp = prevOp.isEmpty() ? currentOperator_ : prevOp;
-		if (!restoreOp.isEmpty())
-			ui->comboBox_meta_operator->setCurrentText(restoreOp);
-		else
-			ui->comboBox_meta_operator->setCurrentIndex(-1);
-	}
-
-	// helper: ripopola un QComboBox mantenendo il valore corrente se ancora valido
-	auto repopPreserving = [](QComboBox *cb, const QStringList &items) {
-		const QString prev = cb->currentText();
-		cb->clear();
-		cb->addItems(items);
-		if (!prev.isEmpty() && items.contains(prev))
-			cb->setCurrentText(prev);
-		else
-			cb->setCurrentIndex(-1);
-	};
-
-	// ID CAD: bloccato durante il repop per evitare che la cascata CAD→Patch scatti
-	// con valori intermedi (clear, primo item, valore finale). La cascata viene
-	// fatta una volta sola manualmente dopo, con il valore definitivo.
-	{
-		QSignalBlocker cadBlocker(ui->lineEdit_acq);
-		repopPreserving(ui->lineEdit_acq, atFilteredList("CAD"));
-	}
-
-	// Material, Test: filtrati per operatore
-	repopPreserving(ui->comboBox_meta_material, atFilteredList("MATERIAL"));
-	repopPreserving(ui->comboBox_meta_test,     atFilteredList("TEST"));
-
-	// ID Patch: cascata manuale dal CAD definitivo, preserva valore se ancora valido
-	const QString currentCad = ui->lineEdit_acq->currentText();
-	repopPreserving(ui->lineEdit_participant, atFilteredList("PATCH:" + currentCad));
-
-	// Perno: liste globali, indipendenti da CAD e da operatore
-	auto allItems = [this](const QString &key) {
-		QStringList out;
-		for (const auto &pair : atCsvData_.value(key))
-			out << pair.first;
-		return out;
-	};
-	repopPreserving(ui->comboBox_meta_perno_materiale, allItems("PERNO_MATERIALE"));
-	repopPreserving(ui->comboBox_meta_perno_diametro,  allItems("PERNO_DIAMETRO"));
-	repopPreserving(ui->comboBox_meta_perno_numero,    allItems("PERNO_NUMERO"));
-	repopPreserving(ui->comboBox_meta_perno_posizione, allItems("PERNO_POSIZIONE"));
-}
-
-// [ADAPTRONICS] legge LR_Runtime_Entries.csv e popola atCsvData_ per le tendine a cascata
-// formato CSV: TYPE,ID,PARENT_ID,OPERATOR (prima riga = intestazione, ignorata)
-// OPERATOR opzionale: vuoto = voce visibile a tutti; valorizzato = visibile solo a quell'operatore
-void MainWindow::loadAtCsv(const QString &cfgDir) {
-	// [ADAPTRONICS] legge username Windows per pre-compilare il campo Operator e filtrare le voci
-	currentOperator_ = QString::fromLocal8Bit(qgetenv("USERNAME"));
-
-	QString csvPath = cfgDir + "/LR_Runtime_Entries.csv";
-	QFile file(csvPath);
-	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-		qInfo() << "[ADAPTRONICS] LR_Runtime_Entries.csv non trovato in: " << cfgDir;
-		return;
-	}
-	QTextStream in(&file);
-	in.readLine(); // salta intestazione TYPE,ID,PARENT_ID,OPERATOR
-	while (!in.atEnd()) {
-		QString line = in.readLine().trimmed();
-		if (line.isEmpty()) continue;
-		QStringList parts = line.split(',');
-		if (parts.size() < 2) continue;
-		QString type       = parts[0].trimmed().toUpper();
-		QString id         = parts[1].trimmed();
-		QString parentId   = parts.size() > 2 ? parts[2].trimmed() : "";
-		QString opFilter   = parts.size() > 3 ? parts[3].trimmed() : "";
-		QString key        = parentId.isEmpty() ? type : type + ":" + parentId;
-		atCsvData_[key].append(qMakePair(id, opFilter));
-	}
-	// [ADAPTRONICS] BEGIN — popola tutti i dropdown e collega i filtri "inizia con"
-
-	// popola al primo caricamento (applica già il filtro operatore)
-	repopulateAtDropdowns();
-
-	// filtro "inizia con" per ID CAD
-	connect(ui->lineEdit_acq->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
-		ui->lineEdit_acq->blockSignals(true);
-		ui->lineEdit_acq->clear();
-		for (const QString &item : atFilteredList("CAD"))
-			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
-				ui->lineEdit_acq->addItem(item);
-		ui->lineEdit_acq->setEditText(text);
-		ui->lineEdit_acq->blockSignals(false);
-	});
-
-	// filtro "inizia con" per ID Patch (figli del CAD corrente)
-	connect(ui->lineEdit_participant->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
-		const QString cadText = ui->lineEdit_acq->currentText();
-		ui->lineEdit_participant->blockSignals(true);
-		ui->lineEdit_participant->clear();
-		for (const QString &item : atFilteredList("PATCH:" + cadText))
-			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
-				ui->lineEdit_participant->addItem(item);
-		ui->lineEdit_participant->setEditText(text);
-		ui->lineEdit_participant->blockSignals(false);
-	});
-
-	// filtri per Operator, Material, Test
-	auto connectSimpleFilter = [this](QComboBox *cb, const QString &key) {
-		connect(cb->lineEdit(), &QLineEdit::textEdited, this, [this, cb, key](const QString &text) {
-			cb->blockSignals(true);
-			cb->clear();
-			for (const QString &item : atFilteredList(key))
-				if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
-					cb->addItem(item);
-			cb->setEditText(text);
-			cb->blockSignals(false);
-		});
-	};
-	connectSimpleFilter(ui->comboBox_meta_material, "MATERIAL");
-	connectSimpleFilter(ui->comboBox_meta_test,     "TEST");
-	// Operator: filtro "inizia con" mostra sempre tutti (no filtro operatore su se stesso)
-	connect(ui->comboBox_meta_operator->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
-		ui->comboBox_meta_operator->blockSignals(true);
-		ui->comboBox_meta_operator->clear();
-		for (const auto &pair : atCsvData_.value("OPERATOR"))
-			if (text.isEmpty() || pair.first.startsWith(text, Qt::CaseInsensitive))
-				ui->comboBox_meta_operator->addItem(pair.first);
-		ui->comboBox_meta_operator->setEditText(text);
-		ui->comboBox_meta_operator->blockSignals(false);
-	});
-	// quando l'operatore selezionato cambia → ripopola i dropdown filtrati
-	connect(ui->comboBox_meta_operator, &QComboBox::currentTextChanged, this, [this](const QString &) {
-		repopulateAtDropdowns();
-	});
-
-	// filtri per i 4 campi Perno: globali, indipendenti da CAD e operatore
-	connectSimpleFilter(ui->comboBox_meta_perno_materiale, "PERNO_MATERIALE");
-	connectSimpleFilter(ui->comboBox_meta_perno_diametro,  "PERNO_DIAMETRO");
-	connectSimpleFilter(ui->comboBox_meta_perno_numero,    "PERNO_NUMERO");
-	connectSimpleFilter(ui->comboBox_meta_perno_posizione, "PERNO_POSIZIONE");
-
-	// spunta "Mostra tutto": toglie il filtro operatore e ripopola tutte le tendine
-	connect(ui->checkBox_showAll, &QCheckBox::toggled, this, [this](bool checked) {
-		atShowAll_ = checked;
-		repopulateAtDropdowns();
-	});
-	// [ADAPTRONICS] END — filtri
-}
-// [FINE ADAPTRONICS]
 
 MainWindow::~MainWindow() noexcept = default;
 
@@ -959,6 +792,12 @@ void MainWindow::enableRcs(bool bEnable) {
 		connect(rcs.get(), &RemoteControlSocket::filename, this, &MainWindow::rcsUpdateFilename);
 		connect(rcs.get(), &RemoteControlSocket::select_all, this, &MainWindow::selectAllStreams);
 		connect(rcs.get(), &RemoteControlSocket::select_none, this, &MainWindow::selectNoStreams);
+		// [ADAPTRONICS] BEGIN — risposta al comando TCP "status": run corrente come JSON sulla socket
+		connect(rcs.get(), &RemoteControlSocket::status_requested, this, [this](QTcpSocket *sock) {
+			QString response = "{\"run\":" + QString::number(ui->spin_counter->value()) + "}\n";
+			sock->write(response.toUtf8());
+		});
+		// [ADAPTRONICS] END — risposta comando status
 	}
 	bool oldState = ui->rcsCheckBox->blockSignals(true);
 	ui->rcsCheckBox->setChecked(bEnable);
@@ -994,7 +833,19 @@ void MainWindow::rcsUpdateFilename(QString s) {
 	//	task; run; participant; session; acquisition: base options
 	//	(BIDS) modality: from either the defaults eeg, ieeg, meg, beh or adding a new
 	//		potentially unsupported value.
+	//
+	// [ADAPTRONICS] opzioni aggiuntive per metadati sessione (v2):
+	//	operator; material; test; note; perno_materiale; perno_diametro; perno_numero; perno_posizione
 	QRegularExpression re("{(?P<option>\\w+?):(?P<value>[^}]*)}");
+
+	// [ADAPTRONICS] BEGIN — raccolta opzioni Adaptronics per applicazione in due fasi
+	// Problema: setCurrentText(operator) scatena repopulateAtDropdowns() che resetta le altre tendine.
+	// Soluzione: raccogliamo tutti i valori AT nel primo pass, poi li applichiamo dopo il loop
+	// nella sequenza corretta: operator prima (triggera il repopulate), poi tutti gli altri.
+	QString rcs_operator, rcs_material, rcs_test, rcs_note;
+	QString rcs_perno_mat, rcs_perno_diam, rcs_perno_num, rcs_perno_pos;
+	bool has_operator = false;
+	// [ADAPTRONICS] END — raccolta opzioni Adaptronics
 
 	QRegularExpressionMatchIterator i = re.globalMatch(s);
 	while (i.hasNext()) {
@@ -1015,11 +866,11 @@ void MainWindow::rcsUpdateFilename(QString s) {
 		} else if (option.toLower() == "run") {
 			ui->spin_counter->setValue(value.toInt());
 		} else if (option.toLower() == "participant") {
-			ui->lineEdit_participant->setCurrentText(value); // [ADAPTRONICS] setText → setCurrentText per QComboBox
+			ui->lineEdit_participant->setText(value);
 		} else if (option.toLower() == "session") {
-			ui->lineEdit_session->setCurrentText(value); // [ADAPTRONICS] setText → setCurrentText per QComboBox
+			ui->lineEdit_session->setText(value);
 		} else if (option.toLower() == "acquisition") {
-			ui->lineEdit_acq->setCurrentText(value); // [ADAPTRONICS] setText → setCurrentText per QComboBox
+			ui->lineEdit_acq->setText(value);
 		} else if (option.toLower() == "modality") {
 			if (ui->input_modality->findText(value.toLower()) != -1)
 				ui->input_modality->setCurrentIndex(ui->input_modality->findText(value.toLower()));
@@ -1027,8 +878,32 @@ void MainWindow::rcsUpdateFilename(QString s) {
 				ui->input_modality->insertItem(ui->input_modality->count(), value.toLower());
 				ui->input_modality->setCurrentIndex(ui->input_modality->count() - 1);
 			}
+		// [ADAPTRONICS] BEGIN — raccolta metadati sessione (applicati dopo il loop, vedi sotto)
+		} else if (option.toLower() == "operator")         { rcs_operator  = value; has_operator = true;
+		} else if (option.toLower() == "material")         { rcs_material  = value;
+		} else if (option.toLower() == "test")             { rcs_test      = value;
+		} else if (option.toLower() == "note")             { rcs_note      = value;
+		} else if (option.toLower() == "perno_materiale")  { rcs_perno_mat  = value;
+		} else if (option.toLower() == "perno_diametro")   { rcs_perno_diam = value;
+		} else if (option.toLower() == "perno_numero")     { rcs_perno_num  = value;
+		} else if (option.toLower() == "perno_posizione")  { rcs_perno_pos  = value;
 		}
+		// [ADAPTRONICS] END — raccolta metadati sessione
 	}
+
+	// [ADAPTRONICS] BEGIN — applicazione metadati sessione in due fasi
+	// Fase 1: operator (triggera repopulateAtDropdowns — resetta material/test/perno al CSV)
+	// Fase 2: tutti gli altri (sovrascrivono ciò che repopulateAtDropdowns ha impostato)
+	if (has_operator)              ui->lineEdit_meta_operator->setText(rcs_operator);
+	if (!rcs_material.isEmpty())   ui->lineEdit_meta_material->setText(rcs_material);
+	if (!rcs_test.isEmpty())       ui->lineEdit_meta_test->setText(rcs_test);
+	if (!rcs_note.isEmpty())       ui->plainTextEdit_meta_note->setPlainText(rcs_note);
+	if (!rcs_perno_mat.isEmpty())  ui->lineEdit_meta_perno_materiale->setText(rcs_perno_mat);
+	if (!rcs_perno_diam.isEmpty()) ui->lineEdit_meta_perno_diametro->setText(rcs_perno_diam);
+	if (!rcs_perno_num.isEmpty())  ui->lineEdit_meta_perno_numero->setText(rcs_perno_num);
+	if (!rcs_perno_pos.isEmpty())  ui->lineEdit_meta_perno_posizione->setText(rcs_perno_pos);
+	// [ADAPTRONICS] END — applicazione metadati sessione
+
 	// to make sure all the values are updated.
 	printReplacedFilename();
 }

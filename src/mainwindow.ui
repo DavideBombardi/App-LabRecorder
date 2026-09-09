@@ -174,24 +174,14 @@
           </property>
          </widget>
         </item>
-        <!-- [ADAPTRONICS] convertito da QLineEdit a QComboBox editabile per supporto menu a tendina da CSV -->
-        <!-- [ADAPTRONICS] spostato a row=6: ID CAD deve stare sopra a ID Patch -->
         <item row="6" column="1">
-         <widget class="QComboBox" name="lineEdit_participant">
-          <property name="editable">
-           <bool>true</bool>
-          </property>
-         </widget>
+         <widget class="QLineEdit" name="lineEdit_participant"/>
         </item>
         <item row="1" column="1">
          <widget class="QLineEdit" name="lineEdit_template"/>
         </item>
-        <!-- [ADAPTRONICS] Production Code nascosto: non più usato nella struttura cartelle -->
         <item row="5" column="1">
-         <widget class="QComboBox" name="lineEdit_session">
-          <property name="editable">
-           <bool>true</bool>
-          </property>
+         <widget class="QLineEdit" name="lineEdit_session">
           <property name="visible">
            <bool>false</bool>
           </property>
@@ -221,14 +211,8 @@
           </property>
          </widget>
         </item>
-        <!-- [ADAPTRONICS] convertito da QLineEdit a QComboBox editabile per supporto menu a tendina da CSV -->
-        <!-- [ADAPTRONICS] spostato a row=4: ID CAD deve stare sopra a ID Patch -->
         <item row="4" column="1">
-         <widget class="QComboBox" name="lineEdit_acq">
-          <property name="editable">
-           <bool>true</bool>
-          </property>
-         </widget>
+         <widget class="QLineEdit" name="lineEdit_acq"/>
         </item>
         <!-- [ADAPTRONICS] rinominato da "Participant (%p)" a "ID Patch" per contesto industriale -->
         <!-- [ADAPTRONICS] spostato a row=6: ID CAD deve stare sopra a ID Patch -->
@@ -345,44 +329,31 @@
       <string>Metadati Sessione</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_metadata">
-      <!-- [ADAPTRONICS] spunta "Mostra tutto": disabilita il filtro per operatore su tutte le tendine -->
-      <item row="0" column="0" colspan="2">
-       <widget class="QCheckBox" name="checkBox_showAll">
-        <property name="text"><string>Mostra tutto (disabilita filtro operatore)</string></property>
-       </widget>
-      </item>
-      <item row="1" column="0">
+      <item row="0" column="0">
        <widget class="QLabel" name="label_meta_operator">
         <property name="text"><string>Operator</string></property>
        </widget>
       </item>
-      <item row="1" column="1">
-       <widget class="QComboBox" name="comboBox_meta_operator">
-        <property name="editable"><bool>true</bool></property>
-       </widget>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="lineEdit_meta_operator"/>
       </item>
-      <item row="2" column="0">
+      <item row="1" column="0">
        <widget class="QLabel" name="label_meta_material">
         <property name="text"><string>Material ID</string></property>
        </widget>
       </item>
-      <item row="2" column="1">
-       <widget class="QComboBox" name="comboBox_meta_material">
-        <property name="editable"><bool>true</bool></property>
-       </widget>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="lineEdit_meta_material"/>
       </item>
-      <item row="3" column="0">
+      <item row="2" column="0">
        <widget class="QLabel" name="label_meta_test">
         <property name="text"><string>Test ID</string></property>
        </widget>
       </item>
-      <item row="3" column="1">
-       <widget class="QComboBox" name="comboBox_meta_test">
-        <property name="editable"><bool>true</bool></property>
-       </widget>
+      <item row="2" column="1">
+       <widget class="QLineEdit" name="lineEdit_meta_test"/>
       </item>
-      <!-- [ADAPTRONICS] gruppo perno: 4 campi dipendenti da ID CAD, popolati da CSV -->
-      <item row="4" column="0" colspan="2">
+      <item row="3" column="0" colspan="2">
        <widget class="QGroupBox" name="groupBox_perno">
         <property name="title"><string>Perno</string></property>
         <layout class="QGridLayout" name="gridLayout_perno">
@@ -392,9 +363,7 @@
           </widget>
          </item>
          <item row="0" column="1">
-          <widget class="QComboBox" name="comboBox_meta_perno_materiale">
-           <property name="editable"><bool>true</bool></property>
-          </widget>
+          <widget class="QLineEdit" name="lineEdit_meta_perno_materiale"/>
          </item>
          <item row="1" column="0">
           <widget class="QLabel" name="label_perno_diametro">
@@ -402,9 +371,7 @@
           </widget>
          </item>
          <item row="1" column="1">
-          <widget class="QComboBox" name="comboBox_meta_perno_diametro">
-           <property name="editable"><bool>true</bool></property>
-          </widget>
+          <widget class="QLineEdit" name="lineEdit_meta_perno_diametro"/>
          </item>
          <item row="2" column="0">
           <widget class="QLabel" name="label_perno_numero">
@@ -412,9 +379,7 @@
           </widget>
          </item>
          <item row="2" column="1">
-          <widget class="QComboBox" name="comboBox_meta_perno_numero">
-           <property name="editable"><bool>true</bool></property>
-          </widget>
+          <widget class="QLineEdit" name="lineEdit_meta_perno_numero"/>
          </item>
          <item row="3" column="0">
           <widget class="QLabel" name="label_perno_posizione">
@@ -422,28 +387,24 @@
           </widget>
          </item>
          <item row="3" column="1">
-          <widget class="QComboBox" name="comboBox_meta_perno_posizione">
-           <property name="editable"><bool>true</bool></property>
-          </widget>
+          <widget class="QLineEdit" name="lineEdit_meta_perno_posizione"/>
          </item>
         </layout>
        </widget>
       </item>
-      <item row="5" column="0">
-       <!-- [ADAPTRONICS] rinominato da "Note" a "Note pre-test" per chiarire che vanno compilate prima dello Start -->
+      <item row="4" column="0">
        <widget class="QLabel" name="label_meta_note">
         <property name="text"><string>Note pre-test</string></property>
        </widget>
       </item>
-      <!-- [ADAPTRONICS] convertito da QLineEdit a QPlainTextEdit per supporto testo multilinea nelle note -->
-      <item row="5" column="1">
+      <item row="4" column="1">
        <widget class="QPlainTextEdit" name="plainTextEdit_meta_note">
         <property name="minimumSize">
          <size><width>0</width><height>60</height></size>
         </property>
        </widget>
       </item>
-      <item row="6" column="0" colspan="2">
+      <item row="5" column="0" colspan="2">
        <spacer name="verticalSpacer_metadata">
         <property name="orientation"><enum>Qt::Vertical</enum></property>
         <property name="sizeHint" stdset="0">
