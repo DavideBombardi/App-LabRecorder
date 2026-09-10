@@ -19,8 +19,15 @@ void RemoteControlSocket::handleLine(QString s, QTcpSocket *sock) {
 	qInfo() << s;
 	if (s == "start")
 		emit start();
-	else if (s == "stop")
+	// [ADAPTRONICS] BEGIN — "stop" risponde OK prima di emettere il segnale, così il flush
+	// del file XDF (bloccante) non tiene Python fermo su readline().
+	// Python riceve subito OK e poi attende RECORDING_DONE su stdout.
+	else if (s == "stop") {
+		sock->write("OK\n");
 		emit stop();
+		return;
+	}
+	// [ADAPTRONICS] END — stop anticipato
 	else if (s == "update")
 			emit refresh_streams();
 	else if (s.contains("filename")) {
