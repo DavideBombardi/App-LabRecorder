@@ -584,13 +584,16 @@ void MainWindow::stopRecording() {
 		// }
 		// // [ADAPTRONICS] END — popup note post-test
 
+		// [ADAPTRONICS] auto-incrementa il run counter dopo ogni stop.
+		// DEVE stare prima di notifyRecordingDone(): setValue() triggera buildFilename()
+		// che scansiona il disco — se arrivasse dopo, il TCP "status" successivo troverebbe
+		// il thread principale ancora bloccato e aspetterebbe 2+ secondi.
+		ui->spin_counter->setValue(ui->spin_counter->value() + 1);
 		// [ADAPTRONICS] notifica completamento: stdout (primario) + last_recording.json (fallback)
 		if (!lastRecFilename_.isEmpty()) {
 			QString cfgDir = QFileInfo(QCoreApplication::applicationFilePath()).absolutePath();
 			notifyRecordingDone(cfgDir);
 		}
-		// [ADAPTRONICS] auto-incrementa il run counter dopo ogni stop
-		ui->spin_counter->setValue(ui->spin_counter->value() + 1);
 	} else if (!hideWarnings) {
 		QMessageBox::information(
 			this, "Not recording", "There is not ongoing recording", QMessageBox::Ok);
