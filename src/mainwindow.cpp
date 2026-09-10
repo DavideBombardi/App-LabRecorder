@@ -522,6 +522,10 @@ void MainWindow::startRecording() {
 		sessionMetadata["perno_posizione"]   = ui->lineEdit_meta_perno_posizione->text().toStdString();
 		sessionMetadata["start_time"]        = QDateTime::currentDateTime().toString(Qt::ISODate).toStdString();
 		sessionMetadata["run"]               = QString::number(ui->spin_counter->value()).toStdString(); // [ADAPTRONICS] run corrente inclusa nei metadati XDF e nel JSON
+		// [ADAPTRONICS] BEGIN — board ID dinamici
+		for (const auto &kv : dynamicBoardIds_)
+			sessionMetadata[kv.first] = kv.second;
+		// [ADAPTRONICS] END — board ID dinamici
 		// [ADAPTRONICS] salva path e metadati per la notifica di completamento in stopRecording()
 		lastRecFilename_     = recFilename;
 		lastSessionMetadata_ = sessionMetadata;
@@ -913,7 +917,11 @@ void MainWindow::rcsUpdateFilename(QString s) {
 		} else if (option.toLower() == "perno_diametro")   { rcs_perno_diam = value;
 		} else if (option.toLower() == "perno_numero")     { rcs_perno_num  = value;
 		} else if (option.toLower() == "perno_posizione")  { rcs_perno_pos  = value;
+		// [ADAPTRONICS] BEGIN — board ID dinamici: qualsiasi chiave board_id_* viene salvata
+		} else if (option.toLower().startsWith("board_id_")) {
+			dynamicBoardIds_[option.toLower().toStdString()] = value.toStdString();
 		}
+		// [ADAPTRONICS] END — board ID dinamici
 		// [ADAPTRONICS] END — raccolta metadati sessione
 	}
 

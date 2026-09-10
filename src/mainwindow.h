@@ -88,6 +88,9 @@ private:
 	QString buildCompletionJson() const;
 	void notifyRecordingDone(const QString &cfgDir) const;
 
+	// [ADAPTRONICS] board ID dinamici: chiavi board_id_* ricevute via TCP filename
+	std::map<std::string, std::string> dynamicBoardIds_;
+
 
 	// @Doug1983 added to suppress pop-ups when remotely starting recording
 	// and missing streams or having some unchecked streams
