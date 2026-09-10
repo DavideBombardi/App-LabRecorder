@@ -50,6 +50,10 @@ class LabRecorderAPI:
         #   level: "INFO", "WARNING", "CRITICAL", "FATAL"
         self.on_log: Optional[Callable] = None
 
+        # on_streams_status(data: dict)  — chiamato dopo un comando "update"
+        #   data contiene: available (list[str]), missing (list[str])
+        self.on_streams_status: Optional[Callable] = None
+
         # on_crash(exit_code: int)  — chiamato se LabRecorder muore inaspettatamente
         self.on_crash: Optional[Callable] = None
 
@@ -219,6 +223,7 @@ class LabRecorderAPI:
     def _dispatch(self, line: str):
         PREFIX_STARTED = "[LabRecorder] RECORDING_STARTED:"
         PREFIX_DONE    = "[LabRecorder] RECORDING_DONE:"
+        PREFIX_STREAMS = "[LabRecorder] STREAMS_STATUS:"
         PREFIX_LOG     = "[LabRecorder] LOG:"
 
         try:
@@ -231,6 +236,11 @@ class LabRecorderAPI:
                 data = json.loads(line[len(PREFIX_DONE):])
                 if self.on_done:
                     self.on_done(data)
+
+            elif line.startswith(PREFIX_STREAMS):
+                data = json.loads(line[len(PREFIX_STREAMS):])
+                if self.on_streams_status:
+                    self.on_streams_status(data)
 
             elif line.startswith(PREFIX_LOG):
                 rest  = line[len(PREFIX_LOG):]

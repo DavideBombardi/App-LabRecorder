@@ -24,6 +24,7 @@ void RemoteControlSocket::handleLine(QString s, QTcpSocket *sock) {
 	// Python riceve subito OK e poi attende RECORDING_DONE su stdout.
 	else if (s == "stop") {
 		sock->write("OK\n");
+		sock->flush(); // [ADAPTRONICS] forza invio immediato prima che emit stop() blocchi l'event loop
 		emit stop();
 		return;
 	}

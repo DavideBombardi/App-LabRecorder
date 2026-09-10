@@ -789,7 +789,30 @@ void MainWindow::enableRcs(bool bEnable) {
 		uint16_t port = ui->rcsport->value();
 		rcs = std::make_unique<RemoteControlSocket>(port);
 		// TODO: Add some method to RemoteControlSocket to report if its server is listening (i.e. was successful).
-		connect(rcs.get(), &RemoteControlSocket::refresh_streams, this, &MainWindow::refreshStreams);
+		// [ADAPTRONICS] BEGIN — update TCP: refresh + stampa STREAMS_STATUS su stdout
+		connect(rcs.get(), &RemoteControlSocket::refresh_streams, this, [this]() {
+			refreshStreams();
+			QString json = "{\"available\":[";
+			bool first = true;
+			for (const auto &k : knownStreams) {
+				if (k.checked) {
+					if (!first) json += ",";
+					json += "\"" + k.listName() + "\"";
+					first = false;
+				}
+			}
+			json += "],\"missing\":[";
+			first = true;
+			for (const auto &m : std::as_const(missingStreams)) {
+				if (!first) json += ",";
+				json += "\"" + m + "\"";
+				first = false;
+			}
+			json += "]}";
+			std::cout << "[LabRecorder] STREAMS_STATUS:" << json.toStdString() << std::endl;
+			std::cout.flush();
+		});
+		// [ADAPTRONICS] END — update TCP
 		connect(rcs.get(), &RemoteControlSocket::start, this, &MainWindow::rcsStartRecording);
 		connect(rcs.get(), &RemoteControlSocket::stop, this, &MainWindow::rcsStopRecording);
 		connect(rcs.get(), &RemoteControlSocket::filename, this, &MainWindow::rcsUpdateFilename);
