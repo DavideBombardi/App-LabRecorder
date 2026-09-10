@@ -25,7 +25,7 @@ public:
 		std::string hostname, bool required)
 		: name(stream_name), type(stream_type), id(source_id), host(hostname), checked(required) {}
 	
-	QString listName() { return QString::fromStdString(name + " (" + host + ")"); }
+	QString listName() const { return QString::fromStdString(name + " (" + host + ")"); }
 	std::string name;
 	std::string type;
 	std::string id;
