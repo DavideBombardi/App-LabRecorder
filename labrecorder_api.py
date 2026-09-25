@@ -169,6 +169,14 @@ class LabRecorderAPI:
     def select_no_streams(self):
         self._send("select none")
 
+    def select_streams(self, streams: list):
+        """Seleziona esattamente gli stream indicati (deseleziona tutti gli altri).
+        streams: lista di stringhe nel formato "nome (hostname)" — stesso formato di on_streams_status.
+        Esempio: lr.select_streams(["BioSemi (PC-LAB)", "Arduino (PC-LAB)"])
+        """
+        payload = "".join(f"{{stream:{s}}}" for s in streams)
+        self._send("select " + payload)
+
     # ------------------------------------------------------------------
     # Monitoraggio processo
     # ------------------------------------------------------------------

@@ -822,6 +822,7 @@ void MainWindow::enableRcs(bool bEnable) {
 		connect(rcs.get(), &RemoteControlSocket::filename, this, &MainWindow::rcsUpdateFilename);
 		connect(rcs.get(), &RemoteControlSocket::select_all, this, &MainWindow::selectAllStreams);
 		connect(rcs.get(), &RemoteControlSocket::select_none, this, &MainWindow::selectNoStreams);
+		connect(rcs.get(), &RemoteControlSocket::select_streams, this, &MainWindow::rcsSelectStreams); // [ADAPTRONICS]
 		// [ADAPTRONICS] BEGIN — risposta al comando TCP "status": run corrente come JSON sulla socket
 		connect(rcs.get(), &RemoteControlSocket::status_requested, this, [this](QTcpSocket *sock) {
 			QString response = "{\"run\":" + QString::number(ui->spin_counter->value()) + "}\n";
@@ -853,6 +854,23 @@ void MainWindow::rcsStopRecording() {
 	hideWarnings = true;
 	stopRecording();
 }
+
+// [ADAPTRONICS] BEGIN — selezione stream specifici per nome+host via TCP
+// Formato comando: select {stream:BioSemi (PC-LAB)}{stream:Arduino (PC-LAB)}
+// Deseleziona tutto, poi spunta solo gli stream indicati.
+void MainWindow::rcsSelectStreams(QString s) {
+	QRegularExpression re("\\{stream:([^}]+)\\}");
+	QSet<QString> requested;
+	QRegularExpressionMatchIterator it = re.globalMatch(s);
+	while (it.hasNext())
+		requested.insert(it.next().captured(1).trimmed());
+
+	for (int i = 0; i < ui->streamList->count(); i++) {
+		QListWidgetItem *item = ui->streamList->item(i);
+		item->setCheckState(requested.contains(item->text()) ? Qt::Checked : Qt::Unchecked);
+	}
+}
+// [ADAPTRONICS] END — selezione stream specifici
 
 void MainWindow::rcsUpdateFilename(QString s) {
 	//

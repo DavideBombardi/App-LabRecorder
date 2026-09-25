@@ -38,7 +38,11 @@ void RemoteControlSocket::handleLine(QString s, QTcpSocket *sock) {
 			emit select_all();
 		} else if (s.contains("none")) {
 			emit select_none();
+		// [ADAPTRONICS] BEGIN — selezione stream specifici per nome+host
+		} else if (s.contains("{stream:")) {
+			emit select_streams(s);
 		}
+		// [ADAPTRONICS] END — selezione stream specifici
 	// [ADAPTRONICS] BEGIN — comando status: restituisce run corrente come JSON invece di OK
 	} else if (s == "status") {
 		emit status_requested(sock);

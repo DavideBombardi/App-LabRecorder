@@ -58,6 +58,7 @@ private slots:
 	void rcsUpdateFilename(QString s);
 	void rcsStartRecording();
 	void rcsStopRecording();
+	void rcsSelectStreams(QString s); // [ADAPTRONICS] selezione stream specifici per nome+host
 	void rcsportValueChangedInt(int value);
 
 private:
